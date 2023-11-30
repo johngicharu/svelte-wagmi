@@ -24,6 +24,7 @@ export default defineConfig({
 	optimizeDeps: {
 		esbuildOptions: {
 			plugins: [esbuildCommonjs(['@wagmi/core'])]
-		}
+		},
+		include: ['@web3auth/ethereum-provider']
 	}
 });

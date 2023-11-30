@@ -13,13 +13,47 @@
 		wagmiLoaded
 	} from '$lib/stores/wagmi';
 	import { onMount } from 'svelte';
-	import { PUBLIC_WALLETCONNECT_ID, PUBLIC_ALCHEMY_ID } from '$env/static/public';
+	import { mainnet, goerli } from '@wagmi/chains';
+	import {
+		PUBLIC_WALLETCONNECT_ID,
+		PUBLIC_ALCHEMY_ID,
+		PUBLIC_WEB3AUTH_ID
+	} from '$env/static/public';
+	import { CoinbaseWalletConnector } from '@wagmi/connectors/coinbaseWallet';
+	import { InjectedConnector } from '@wagmi/connectors/injected';
+	import { WalletConnectConnector } from '@wagmi/connectors/walletConnect';
+	import Web3AuthConnectorInstance from '$lib/Web3AuthConnectorInstance';
 
 	onMount(async () => {
+		const chains = [goerli];
+
 		const erckit = defaultConfig({
 			appName: 'erc.kit',
 			walletConnectProjectId: PUBLIC_WALLETCONNECT_ID,
-			alchemyId: PUBLIC_ALCHEMY_ID
+			alchemyId: PUBLIC_ALCHEMY_ID,
+			connectors: [
+				new CoinbaseWalletConnector({
+					chains,
+					options: {
+						appName: 'wagmi'
+					}
+				}),
+				new WalletConnectConnector({
+					chains,
+					options: {
+						projectId: PUBLIC_WALLETCONNECT_ID,
+						showQrModal: true
+					}
+				}),
+				new InjectedConnector({
+					chains,
+					options: {
+						name: 'Injected',
+						shimDisconnect: true
+					}
+				}),
+				Web3AuthConnectorInstance(chains, PUBLIC_WEB3AUTH_ID, false)
+			]
 		});
 
 		await erckit.init();
@@ -48,7 +82,7 @@
 			<button
 				on:click={async () => {
 					$loading = true;
-					await $web3Modal.openModal();
+					await $web3Modal.open();
 					$loading = false;
 				}}
 			>

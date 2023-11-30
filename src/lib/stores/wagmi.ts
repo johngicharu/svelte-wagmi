@@ -16,12 +16,14 @@ import { mainnet, polygon, optimism, arbitrum, type Chain } from '@wagmi/core/ch
 import { publicProvider } from '@wagmi/core/providers/public';
 import { alchemyProvider } from '@wagmi/core/providers/alchemy';
 import { InjectedConnector } from '@wagmi/core/connectors/injected';
-import { EthereumClient, w3mProvider } from '@web3modal/ethereum';
-import { Web3Modal } from '@web3modal/html';
+import { w3mProvider } from '@web3modal/ethereum';
+import { createWeb3Modal, walletConnectProvider, EIP6963Connector } from '@web3modal/wagmi';
+// import type { Web3Modal } from '@web3modal/html';
 import { WalletConnectConnector } from '@wagmi/core/connectors/walletConnect';
 import { infuraProvider } from '@wagmi/core/providers/infura';
 import { jsonRpcProvider } from '@wagmi/core/providers/jsonRpc';
 import { CoinbaseWalletConnector } from '@wagmi/core/connectors/coinbaseWallet';
+import type { Web3Modal } from '@web3modal/wagmi/dist/types/src/client';
 
 export const connected = writable<boolean>(false);
 export const wagmiLoaded = writable<boolean>(false);
@@ -29,6 +31,7 @@ export const chainId = writable<number | null | undefined>(null);
 export const signerAddress = writable<string | null>(null);
 export const configuredConnectors = writable<Connector[]>([]);
 export const loading = writable<boolean>(true);
+// export const web3Modal = writable<Web3Modal>();
 export const web3Modal = writable<Web3Modal>();
 
 interface IOptions {
@@ -36,6 +39,7 @@ interface IOptions {
 	walletconnectProjectID?: string;
 	alchemyKey?: string | null;
 	autoConnect?: boolean;
+	connectors?: any;
 }
 
 type DefaultConnectorsProps = {
@@ -87,21 +91,6 @@ const getDefaultConnectors = ({
 				jsonRpcUrl: `https://eth-mainnet.alchemyapi.io/v2/${alchemyId}`
 			}
 		}),
-		new WalletConnectConnector({
-			chains,
-			options: {
-				showQrModal: false,
-				projectId: walletConnectProjectId,
-				metadata: hasAllAppData
-					? {
-							name: app.name,
-							description: app.description!,
-							url: app.url!,
-							icons: [app.icon!]
-					  }
-					: undefined
-			}
-		}),
 		new InjectedConnector({
 			chains,
 			options: {
@@ -110,6 +99,26 @@ const getDefaultConnectors = ({
 			}
 		})
 	];
+
+	if (walletConnectProjectId) {
+		defaultConnectors.push(
+			new WalletConnectConnector({
+				chains,
+				options: {
+					showQrModal: false,
+					projectId: walletConnectProjectId,
+					metadata: hasAllAppData
+						? {
+								name: app.name,
+								description: app.description!,
+								url: app.url!,
+								icons: [app.icon!]
+						  }
+						: undefined
+				}
+			})
+		);
+	}
 
 	configuredConnectors.set(defaultConnectors);
 	return defaultConnectors;
@@ -146,8 +155,11 @@ export const configureWagmi = async (options: IOptions = {}) => {
 	});
 
 	if (options.walletconnect && options.walletconnectProjectID) {
-		const ethereumClient = new EthereumClient(wagmiClient, chains);
-		const modal = new Web3Modal({ projectId: options.walletconnectProjectID }, ethereumClient);
+		const modal = createWeb3Modal({
+			wagmiConfig: wagmiClient,
+			projectId: options.walletconnectProjectID,
+			chains
+		});
 
 		web3Modal.set(modal);
 	}
@@ -186,6 +198,7 @@ export const defaultConfig = ({
 	);
 
 	providers.push(publicProvider());
+
 	const {
 		publicClient: configuredPublicClient,
 		chains: configuredChains,
@@ -213,8 +226,11 @@ export const defaultConfig = ({
 			})
 	});
 
-	const ethereumClient = new EthereumClient(ercClient, configuredChains);
-	const modal = new Web3Modal({ projectId: walletConnectProjectId }, ethereumClient);
+	const modal = createWeb3Modal({
+		wagmiConfig: ercClient,
+		projectId: walletConnectProjectId,
+		chains
+	});
 
 	web3Modal.set(modal);
 	wagmiLoaded.set(true);
@@ -278,7 +294,7 @@ export const connection = async () => {
 
 export const WC = async () => {
 	try {
-		get(web3Modal).openModal();
+		get(web3Modal).open();
 		await waitForAccount();
 
 		return { succcess: true };
@@ -297,7 +313,7 @@ export const disconnectWagmi = async () => {
 
 const waitForAccount = () => {
 	return new Promise((resolve, reject) => {
-		const unsub1 = get(web3Modal).subscribeModal((newState) => {
+		const unsub1 = get(web3Modal).subscribeState((newState: { open: any }) => {
 			if (!newState.open) {
 				reject('modal closed');
 				unsub1();
